@@ -2489,350 +2489,155 @@ class Edit
 		BuildMode
 	};
 	Mode mode;
-	Grid<int32>map;
-	HashTable<Teams,Team> teamList;
-	Array<Unit*>unitList;
-	Array<Fort>fortList;
-	Array<City>cityList;
-	Teams nowTeam;
-	CSV mapCSV{ U"CSVFile/mapCSV.csv" };
-	Font font{ 40,Typeface::Bold };
-	Font moneyFont{ 20,Typeface::Black };
-	Font nameFont{ 25,Typeface::Black };
-	Font factoryFont{ 17,Typeface::Bold };
-	double scale = 1;
-	double size = 50;
-	int chipMax = 0;
-	Fort* currentFort = nullptr;
-	City* currentCity = nullptr;
-	double chipScrollX = 0;
-	double scrollXMax = 0;
-	Vec2 mapSize;
-	Vec2 camPos{ 0,0 };
-	double width = size * scale;
-	bool isSet = false;
-	bool isUnitMode = false;
-	bool isEraseMode = false;
-	int selectChip = 0;
-	TextEditState inputText;
-	HashTable<int32, Chip> chipdata;
-	Array<bool> setCities;
-	//HashTable<City,bool> setCities;
-	HashTable<UnitType, UnitData> unitDB;
-	void EditUpdate()
+	// Grid<int32>map; // Moved to EditMapManager
+	HashTable<Teams,Team> teamList; // TODO: Move to EditTeamManager or use TeamManager
+	Array<Unit*>unitList; // TODO: Move to EditUnitManager
+	Array<Fort>fortList; // TODO: Move to EditBuildingManager
+	Array<City>cityList; // TODO: Move to EditBuildingManager
+	Teams nowTeam; // For unit/building team assignment in editor
+	// CSV mapCSV{ U"CSVFile/mapCSV.csv" }; // Handled by EditMapManager
+	Font font{ 40,Typeface::Bold }; // TODO: EditUIManager
+	Font moneyFont{ 20,Typeface::Black }; // TODO: EditUIManager (if needed for editor)
+	Font nameFont{ 25,Typeface::Black }; // TODO: EditUIManager (or passed to draw methods)
+	Font factoryFont{ 17,Typeface::Bold }; // TODO: EditUIManager
+	double scale = 1; // Camera scale, EditController
+	double size = 50; // Tile display size, EditController
+	// int chipMax = 0; // Managed by EditMapManager (chipData.size() or nextChipIdCounter)
+	Fort* currentFort = nullptr; // TODO: EditBuildingManager selection state
+	City* currentCity = nullptr; // TODO: EditBuildingManager selection state
+	double chipScrollX = 0; // UI state, EditUIManager
+	double scrollXMax = 0; // UI state, EditUIManager
+	// Vec2 mapSize; // Map dimensions, managed by EditMapManager (GetMapSize)
+	Vec2 camPos{ 0,0 }; // Camera position, EditController
+	double width = size * scale; // Calculated in EditController or draw methods
+	bool isSet = false; // UI state for settings panel, EditUIManager/EditController
+	bool isUnitMode = false; // Redundant if mode enum is used effectively
+	bool isEraseMode = false; // Editor tool state, EditController/EditUIManager
+	// int selectChip = 0; // Moved to EditMapManager (selectedChipID)
+	TextEditState inputText; // UI state for text input, EditUIManager
+	// HashTable<int32, Chip> chipdata; // Moved to EditMapManager
+	Array<bool> setCities; // Tracks if a city from list is placed, EditBuildingManager
+	HashTable<UnitType, UnitData> unitDB; // TODO: Move to EditUnitManager
+	void EditUpdate() // Will be part of EditController::Update()
 	{
-		width = size * scale;
-		Rect rightR{ 550,0,250,600 };
-		Rect underR{ 0,500,550,100 };
-		Rect unitModeR{ rightR.pos.x - 240,0,240,50 };
-		Array<Rect> judgeR = { rightR,underR,unitModeR };
-		bool isMouseHit = IsHitRects(judgeR);
+		width = size * scale; // Should be done in EditController
+		Rect rightR{ 550,0,250,600 }; // UI layout, EditUIManager
+		Rect underR{ 0,500,550,100 }; // UI layout, EditUIManager
+		Rect unitModeR{ rightR.pos.x - 240,0,240,50 }; // UI layout, EditUIManager
+		Array<Rect> judgeR = { rightR,underR,unitModeR }; // UI interaction, EditUIManager
+		bool isMouseHit = IsHitRects(judgeR); // UI interaction, EditUIManager
+
+		// Camera zoom/pan logic will be in EditController::HandleEditorInput()
 		if (Mouse::Wheel() != 0)
 		{
-			if (!rightR.mouseOver())
+			if (!rightR.mouseOver()) // Assuming rightR is a UI panel rect
 			{
-				scale -= Mouse::Wheel() / 15;
+				// scale -= Mouse::Wheel() / 15; // Camera logic for EditController
 			}
 			else
 			{
-				chipScrollX += Mouse::Wheel() * 15;
-				
-				if (chipScrollX > scrollXMax)
-				{
-					chipScrollX = scrollXMax;
-				}
-				if (chipScrollX < 0)
-				{
-					chipScrollX = 0;
-				}
+				// chipScrollX += Mouse::Wheel() * 15; // UI scroll for EditUIManager
+				// ... chipScrollX clamping ...
 			}
 		}
 		if (MouseM.pressed())
 		{
-			camPos += Cursor::Delta();
+			// camPos += Cursor::Delta(); // Camera logic for EditController
 		}
-		for (auto y : step(map.height()))
-		{
-			for (auto x : step(map.width()))
-			{
-				int chipNo = map[y][x];
-				Polygon h;
-				if (y % 2 == 0)
-				{
-					h = Shape2D::Hexagon(width, Vec2(width * sqrt(3) * x + camPos.x, width * 1.5 * y + camPos.y)).asPolygon();
-				}
-				else
-				{
-					h = Shape2D::Hexagon(width, Vec2(width * sqrt(3) * x + width * sqrt(3) / 2 + camPos.x, width * 1.5 * y + camPos.y)).asPolygon();
-				}
-				if (h.leftPressed() && !isMouseHit)
-				{
-					map[y][x] = selectChip;
-				}
-			}
-		}
-		for (int i = 0; i < chipdata.size(); ++i)
-		{
-			Shape2D h = Shape2D::Hexagon(size, Vec2(rightR.center().x - size, size * 1.5 + 125 * i - chipScrollX));
-			if (h.asPolygon().leftClicked())
-			{
-				if (selectChip == i)
-				{
-					isSet = true;
-				}
-				else
-				{
-					selectChip = i;
-				}
-			}
-		}
+
+		// Chip placement logic will be in EditController::HandleEditorInput()
+		// It will call EditMapManager->PlaceChip(mapCoords)
+		// for (auto y : step(map.height())) // map.height via EditMapManager->GetMapSize().y
+		// {
+		// 	for (auto x : step(map.width())) // map.width via EditMapManager->GetMapSize().x
+		// 	{
+		// 		// ... calculate hexagon shape ...
+		// 		if (h.leftPressed() && !isMouseHit)
+		// 		{
+		// 			// map[y][x] = selectChip; // Call editMapManager->PlaceChip(Point(x,y))
+		// 		}
+		// 	}
+		// }
+
+		// Chip selection from palette logic will be in EditUIManager, calling EditMapManager->SetSelectedChipID()
+		// for (int i = 0; i < chipdata.size(); ++i) // chipdata.size() via EditMapManager->GetChipCount()
+		// {
+		// 	// ... draw chip palette button ...
+		// 	if (h.asPolygon().leftClicked())
+		// 	{
+		// 		// if (selectChip == i) // selectChip from EditMapManager
+		// 		// {
+		// 		// 	isSet = true; // UI state for EditUIManager/EditController
+		// 		// }
+		// 		// else
+		// 		// {
+		// 		// 	// selectChip = i; // Call editMapManager->SetSelectedChipID(i)
+		// 		// }
+		// 	}
+		// }
 	}
-	void DrawChipUI()
+	// void DrawChipUI() // Will be part of EditUIManager::DrawUI()
+	// {
+		// Rect r{ 550,0,250,600 };r.draw(ColorF(0.9, 0.9, 0.9, 0.7));
+		// for (int i = 0; i < chipdata.size(); ++i) // chipdata from EditMapManager
+		// {
+		// 	// ... draw chip in palette ...
+		// 	if (i == selectChip) // selectChip from EditMapManager
+		// 	{
+		// 		h.drawFrame(3, Palette::Red);
+		// 	}
+		// }
+		// Chip Add/Remove button logic will be in EditUIManager, calling EditMapManager methods
+		// if (SimpleGUI::Button(U"-", ...))
+		// {
+		//   // editMapManager->RemoveLastChip(); or RemoveChip(id)
+		// }
+		// if (SimpleGUI::Button(U"+", ...))
+		// {
+		//   // editMapManager->AddNewChip();
+		// }
+	// }
+	void DrawGUI() // Will be part of EditUIManager::DrawUI() or EditController for save/load
 	{
-		Rect r{ 550,0,250,600 };r.draw(ColorF(0.9, 0.9, 0.9, 0.7));
-		for (int i = 0; i < chipdata.size(); ++i)
-		{
-			Shape2D h = Shape2D::Hexagon(size,Vec2(r.center().x - size,size * 1.5 + 125 * i - chipScrollX)).draw(chipdata[i].color).drawFrame(1, Palette::Black);
-			font(chipdata[i].name).draw(Vec2(h.asPolygon().centroid().x + size, h.asPolygon().centroid().y - font.fontSize() / 2),Palette::Black);
-			if (i == selectChip)
-			{
-				h.drawFrame(3, Palette::Red);
-			}
-			
-		}
-		if (SimpleGUI::Button(U"-", Vec2(r.centerX() + 80,r.pos.y),unspecified, chipMax > 1))
-		{
-			
-				if (selectChip == chipMax - 1)
-				{
-					selectChip--;
-				}
-				chipMax--;
-				for (auto y : step(map.height()))
-				{
-					for (auto x : step(map.width()))
-					{
-						if (map[y][x] == chipMax)
-						{
-							map[y][x]--;
-						}
-					}
-				}
+		// Rect r{ 0,500,550,100}; r.draw(ColorF(0.9, 0.9, 0.9, 0.7));
+		// Rect xr{ 320,530,100,60 }; xr.draw(ColorF(1, 1, 1)).drawFrame(3,Palette::Black);
+		// Rect yr{430,530,100,60 }; yr.draw(ColorF(1, 1, 1)).drawFrame(3,Palette::Black);
+		// Rect rightR{ 550,0,250,600 };
+		// nameFont(U"X").draw(Vec2(xr.centerX() - nameFont.fontSize() / 2, xr.pos.y - 6), Palette::Black);
+		// nameFont(U"Y").draw(Vec2(yr.centerX() - nameFont.fontSize() / 2, yr.pos.y - 6), Palette::Black);
 
-				chipdata.erase(chipMax);
-				scrollXMax = 75 + (chipdata.size() - 1) * 125;
-				scrollXMax -= 525;
-				if (scrollXMax < 0)
-				{
-					scrollXMax = 0;
-				}
-		}
-		if (SimpleGUI::Button(U"+", Vec2(r.centerX() + 80, r.br().y - 40)))
-		{
-			Chip c{U"空白",Palette::White,0};
-			chipdata.emplace(chipMax,c);
-			chipMax++;
-			scrollXMax = 75 + (chipdata.size() - 1) * 125;
-			scrollXMax -= 525;
-			if (scrollXMax < 0)
-			{
-				scrollXMax = 0;
-			}
-		}
-	}
-	void DrawGUI()
-	{
-		Rect r{ 0,500,550,100}; r.draw(ColorF(0.9, 0.9, 0.9, 0.7));
-		Rect xr{ 320,530,100,60 }; xr.draw(ColorF(1, 1, 1)).drawFrame(3,Palette::Black);
-		Rect yr{430,530,100,60 }; yr.draw(ColorF(1, 1, 1)).drawFrame(3,Palette::Black);
-		Rect rightR{ 550,0,250,600 };
-		nameFont(U"X").draw(Vec2(xr.centerX() - nameFont.fontSize() / 2, xr.pos.y - 6), Palette::Black);
-		nameFont(U"Y").draw(Vec2(yr.centerX() - nameFont.fontSize() / 2, yr.pos.y - 6), Palette::Black);
-		if (SimpleGUI::Button(U"+", Vec2(xr.centerX() - 2, 550)))
-		{
-			mapSize.x++;
-			Grid<int32> newMap (mapSize.x, mapSize.y,0);
-			for (auto y : step(map.height()))
-			{
-				for (auto x : step(map.width()))
-				{
-					 newMap[y][x] = map[y][x];
-				}
-			}
-			map = newMap;
-		}
-		if (SimpleGUI::Button(U"-", Vec2(xr.centerX() - 50, 550)))
-		{
-			if (mapSize.x > 1)
-			{
-				mapSize.x--;
-				Grid<int32> newMap(mapSize.x, mapSize.y, 0);
-				for (auto y : step(map.height()))
-				{
-					for (int x = 0;x < mapSize.x;x++)
-					{
-						newMap[y][x] = map[y][x];
-					}
-				}
-				map = newMap;
-			}
-			else
-			{
+		// Map resize buttons will call EditMapManager->ResizeMap()
+		// if (SimpleGUI::Button(U"+", Vec2(xr.centerX() - 2, 550)))
+		// {
+		// 	// Size currentMapSize = editMapManager->GetMapSize();
+		// 	// editMapManager->ResizeMap(Size(currentMapSize.x + 1, currentMapSize.y));
+		// }
+		// ... other resize buttons ...
 
-			}
-		}
-		if (SimpleGUI::Button(U"+", Vec2(yr.centerX() - 2, 550)))
-		{
-			mapSize.y++;
-			Grid<int32> newMap(mapSize.x, mapSize.y, 0);
-			for (auto y : step(map.height()))
-			{
-				for (auto x : step(map.width()))
-				{
-					newMap[y][x] = map[y][x];
-				}
-			}
-			map = newMap;
-		}
-		if (SimpleGUI::Button(U"-", Vec2(yr.centerX() - 50, 550)))
-		{
-			if (mapSize.y > 1)
-			{
-				mapSize.y--;
-				Grid<int32> newMap(mapSize.x, mapSize.y, 0);
-				for (int y = 0; y < mapSize.y; y++)
-				{
-					for (auto x : step(map.width()))
-					{
-						newMap[y][x] = map[y][x];
-					}
-				}
-				map = newMap;
-			}
-			else
-			{
-
-			}
-		}
-		if (SimpleGUI::ButtonAt(U"タイトルへ",Vec2(75, r.centerY())))
-		{
-			state = title;
-		}
-		if (SimpleGUI::ButtonAt(U"セーブ", Vec2(250, r.centerY())))
-		{
-			CSV c;
-			c.write(Format(mapSize.x));
-			c.newLine();
-			c.write(Format(mapSize.y));
-			c.newLine();
-			for (auto y : step(map.height()))
-			{
-				for (auto x : step(map.width()))
-				{
-					 c.write(Format(map[y][x]));
-				}
-				c.newLine();
-			}
-			if(FileSystem::IsFile(U"CSVFile/mapCSV.csv"))
-			{
-				FileSystem::Remove(U"CSVFile/mapCSV.csv",AllowUndo::Yes);
-			}
-			c.save(U"CSVFile/mapCSV.csv");
-			CSV preChipCSV{ U"CSVFile/ChipData.csv" };
-			CSV chipCSV;
-			chipCSV.writeRow(preChipCSV[0][0], preChipCSV[0][1],preChipCSV[0][2],preChipCSV[0][3]);
-			for (int i = 0; i < chipdata.size();++i)
-			{
-				chipCSV.writeRow(i, chipdata[i].name, Format(chipdata[i].color), chipdata[i].cost);
-				/*chipCSV[i + 1][0] = Format(i);
-				chipCSV[i + 1][1] = Format(chipdata[i].name);
-				chipCSV[i + 1][2] = Format(chipdata[i].color);
-				chipCSV[i + 1][3] = Format(chipdata[i].cost);*/
-			}
-			if (FileSystem::IsFile(U"CSVFile/ChipData.csv"))
-			{
-				FileSystem::Remove(U"CSVFile/ChipData.csv", AllowUndo::Yes);
-			}
-			chipCSV.save(U"CSVFile/ChipData.csv");
-			CSV unitSetCSV;
-			unitSetCSV.writeRow(U"チーム", U"種類", U"位置");
-			for (auto&& u : unitList)
-			{
-				unitSetCSV.writeRow(u->team == Teams::Red ? 0 : 1, (int)u->type, u->pos);
-			}
-			if (FileSystem::IsFile(U"CSVFile/UnitSetData.csv"))
-			{
-				FileSystem::Remove(U"CSVFile/UnitSetData.csv", AllowUndo::Yes);
-			}
-			unitSetCSV.save(U"CSVFile/UnitSetData.csv");
-			CSV unitDataCSV;
-			unitDataCSV.writeRow(U"名前", U"攻撃範囲", U"移動距離", U"有利タイプ");
-			for (int i = 0; i < unitDB.size(); ++i)
-			{
-				unitDataCSV.writeRow(unitDB[(UnitType)i].name, unitDB[(UnitType)i].range, unitDB[(UnitType)i].speed, (int)unitDB[(UnitType)i].advUnit);
-			}
-			if (FileSystem::IsFile(U"CSVFile/UnitData.csv"))
-			{
-				FileSystem::Remove(U"CSVFile/UnitData.csv", AllowUndo::Yes);
-			}
-			unitDataCSV.save(U"CSVFile/UnitData.csv");
-			CSV cityCSV;
-			cityCSV.writeRow(U"名前", U"チーム", U"お金", U"位置", U"配置するかどうか");
-			for (int i = 0; i < cityList.size(); ++i)
-			{
-				City c = cityList[i];
-				cityCSV.writeRow(c.name,(int)c.team,c.plusMoney,c.pos,setCities[i]);
-			}
-			if (FileSystem::IsFile(U"CSVFile/cityCSV.csv"))
-			{
-				FileSystem::Remove(U"CSVFile/cityCSV.csv", AllowUndo::Yes);
-			}
-			cityCSV.save(U"CSVFile/cityCSV.csv");
-			CSV fortCSV;
-			fortCSV.writeRow(U"チーム", U"位置");
-			for (int i = 0; i < fortList.size(); ++i)
-			{
-				fortCSV.writeRow((int)fortList[i].team, fortList[i].pos);
-			}
-			if (FileSystem::IsFile(U"CSVFile/fortCSV.csv"))
-			{
-				FileSystem::Remove(U"CSVFile/fortCSV.csv", AllowUndo::Yes);
-			}
-			fortCSV.save(U"CSVFile/fortCSV.csv");
-		}
-		if (SimpleGUI::Button(U"ユニットモードに変更",Vec2(rightR.pos.x - 240,0)))
-		{
-			mode = UnitMode;
-			chipScrollX = 0;
-			selectChip = 0;
-			scrollXMax = 75 - 600 + (int)unitDB.size() * 125;
-		}
+		// if (SimpleGUI::ButtonAt(U"タイトルへ",Vec2(75, r.centerY())))
+		// {
+		// 	state = title; // Scene change logic in EditController/SceneManager
+		// }
+		// Save button logic will be in EditUIManager, calling EditController, which uses ProjectManager & EditMapManager
+		// if (SimpleGUI::ButtonAt(U"セーブ", Vec2(250, r.centerY())))
+		// {
+		// 	// editMapManager->SaveMapData(mapPath, chipDataPath);
+		// 	// editUnitManager->SaveUnitData(...);
+		//   // editBuildingManager->SaveBuildingData(...);
+		// }
+		// Mode change buttons will be in EditUIManager, changing state in EditController
+		// if (SimpleGUI::Button(U"ユニットモードに変更",Vec2(rightR.pos.x - 240,0)))
+		// {
+		// 	mode = UnitMode; // EditController.mode = UnitMode;
+		//  // chipScrollX, selectChip, scrollXMax are UI state for EditUIManager
+		// }
 		
 	}
-	void DrawMap()
-	{
-
-		for (auto y : step(map.height()))
-		{
-			for (auto x : step(map.width()))
-			{
-				int chipNo = map[y][x];
-				if (y % 2 == 0)
-				{
-					Shape2D h = Shape2D::Hexagon(width, Vec2(width * sqrt(3) * x + camPos.x, width * 1.5 * y + camPos.y)).draw(chipdata[chipNo].color);
-					h.drawFrame(1, Palette::Black);
-				}
-				else
-				{
-					Shape2D h = Shape2D::Hexagon(width, Vec2(width * sqrt(3) * x + width * sqrt(3) / 2 + camPos.x, width * 1.5 * y + camPos.y)).draw(chipdata[chipNo].color);
-					h.drawFrame(1, Palette::Black);
-				}
-
-				//RectF{ x * width + camPos.x,y * width + camPos.y,width }.draw(chipdata[chipNo].color);
-			}
-		}
-	}
-	void DrawFort()
+	// void DrawMap() // Moved to EditMapManager
+	// {
+	// ...
+	// }
+	void DrawFort() // TODO: EditBuildingManager
 	{
 		for (auto&& fort : fortList)
 		{
@@ -2857,35 +2662,13 @@ class Edit
 			nameFont(U"要塞").draw(Arg::center(f.asPolygon().centroid()),Palette::Black);
 		}
 	}
-	void SettingGUI()
-	{
-		Rect r = { 0,0,800,600 }; r.draw(ColorF(Palette::Black,0.6));
-		Rect guiR = { 100,100,600,400 }; guiR.draw(Palette::Lightgray);
-		if (SimpleGUI::Button(U"×", Vec2(guiR.centerX() + 240, guiR.pos.y)))
-		{
-			isSet = false;
-			inputText.clear();
-		}
-		SimpleGUI::Headline(U"Name", guiR.pos);
-		if (SimpleGUI::TextBox(inputText, Vec2(guiR.pos.x, guiR.pos.y + 40)))
-		{
-			chipdata[selectChip].name = inputText.text;
-		}
-		RectF costR = { guiR.leftCenter().x,guiR.center().y - 90,200,120 }; costR.draw();
-		SimpleGUI::Headline(U"Cost",Vec2(costR.pos.x,costR.pos.y - 35));
-		font(chipdata[selectChip].cost).drawAt(Vec2(costR.center().x, costR.center().y),Palette::Black);
-		if (SimpleGUI::Button(U"-", Vec2(costR.leftCenter().x, costR.center().y + 25)) && chipdata[selectChip].cost > 0)
-		{
-			chipdata[selectChip].cost--;
-		}
-		if (SimpleGUI::Button(U"+", Vec2(costR.center().x + 45,costR.center().y + 25)) && chipdata[selectChip].cost < 99)
-		{
-			chipdata[selectChip].cost++;
-		}
-		SimpleGUI::Headline(U"Color", Vec2(guiR.pos.x, costR.bottomY()));
-		SimpleGUI::ColorPicker(chipdata[selectChip].color, Vec2(guiR.pos.x, costR.bottomY() + 35),true);
-	}
-	bool IsHitRects(Array<Rect> _rects)
+	// void SettingGUI() // This UI for editing chip properties will be part of EditUIManager
+	// {
+		// It will get the selected chip via:
+		// Chip* chipToEdit = editMapManager->GetChipDefinition(editMapManager->GetSelectedChipID());
+		// Then SimpleGUI elements will modify chipToEdit->name, chipToEdit->cost, chipToEdit->color directly.
+	// }
+	bool IsHitRects(Array<Rect> _rects) // UI helper, can be global or part of EditUIManager
 	{
 		bool isHit = false;
 		for (int i = 0; i < _rects.size(); ++i)
